@@ -1,0 +1,5 @@
+bin/*
+dataset/*
+.classpath
+.project
+.settings/*
