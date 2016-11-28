@@ -9,6 +9,7 @@ public class Player extends JFrame {
 		
 		VideoPlayer p = new VideoPlayer();
 		this.add(p);
+		this.pack();
 		
 		//AudioPlayer a = new AudioPlayer();
 		//this.add(a);
