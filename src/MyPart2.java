@@ -15,6 +15,10 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 
 public class MyPart2 {
 	
+	/**
+	 * Category of a shot. I'd use a bit array if that wasn't so silly
+	 * @author Tobias
+	 */
 	public static enum Category {
 		UNKNOWN,
 		SPAM,
@@ -22,6 +26,10 @@ public class MyPart2 {
 		EITHER;
 	}
 	
+	/**
+	 * A single shot. Contains timestamps, category, and other info
+	 * @author Tobias
+	 */
 	public static class Shot {
 		public int start, end;
 		public Category cat;
@@ -462,6 +470,7 @@ public class MyPart2 {
 			audioout = args[3];
 		}
 		
+		//Get shots from video by analyzing video and audio
 		Shot[] shots = analyzeVideo(videopath);
 		analyzeAudio(audiopath, shots);
 		
@@ -539,20 +548,15 @@ public class MyPart2 {
 			}
 		}
 		
+		/*
 		for (Shot s : shots) {
 			System.out.println("Shot: " + s.start + "-" + s.end + ", " + s.cat.name());
 		}
+		*/
 		
 		//Cut the video and audio
 		cutVideo(videopath, videoout, shots);
 		cutAudio(audiopath, audioout, shots);
-		
-		
-		/*
-		if (args.length == 0) {
-			System.out.println();
-			main(new String[] {"dataset2/Videos/data_test2.rgb", "dataset2/Videos/data_test2.wav"});
-		}*/
 	}
 
 }
