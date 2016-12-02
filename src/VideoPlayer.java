@@ -1,3 +1,5 @@
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
@@ -6,8 +8,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
@@ -22,260 +22,206 @@ import javax.swing.Timer;
 
 public class VideoPlayer extends JPanel implements ActionListener {
 
-	Timer timer;
+	/**
+	 * Serial ID to make Eclipse happy
+	 */
+	private static final long serialVersionUID = -8426080774234368297L;
+	
+	//Width and Height of frame
 	public static final int WIDTH = 480;
 	public static final int HEIGHT = 270;
+	
+	//Timer to allow video to update
+	Timer timer;
 
+	//AWT and Swing objects to help display video
 	BufferedImage img;
-	File video;
 	InputStream videoStream;
 	JLabel frame;
 
+	//Swing components to control video
+	JButton play, pause, stop;
+
+	//Audio info for generating audio playback
 	File audio;
-	InputStream audioStream;
-	public int tt = 0;
-	public double prevFrameEntropy = 0, prevR = 0, prevG = 0, prevB = 0;
-	public double prevDifY = 0, prevDifR, prevDifG, prevDifB;
-
-	JButton button;
-
-	AudioInputStream stream;
+	AudioInputStream audioStream;
 	AudioFormat format;
 	DataLine.Info info;
 	Clip clip;
-	PrintWriter out;
+	
+	//Filenames of video and audio
+	String videopath;
+	String audiopath;
 
+	//Current video frame
+	int curFrame;
+
+	//Framerate of video
 	public static final int FRAMERATE = 30;
 
-	public VideoPlayer() {
-		int period = 1000 / FRAMERATE; //To nearest int. 30 fps ~= 33 ms per frame = 29.97 fps
+	public VideoPlayer(String videoPath, String audioPath) {
+		//Get period from framerate to nearest int. 30 fps ~= 33 ms per frame
+		int period = 1000 / FRAMERATE;
 
+		//Remember filenames
+		videopath = videoPath;
+		audiopath = audioPath;
 		
-		try {
-			out = new PrintWriter("output.txt", "UTF-8");
-		} catch (Exception e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
+		//Timer updates every half frame so video will never be desynced by more than a half frame
+		//Excluding off by one issues on my part that may or may not be present
+		timer = new Timer(period/2, this);
 		
-		timer = new Timer(3, this);
+		//Set up components to read video
 		img = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
-		video = new File("dataset2/Videos/data_test2.rgb");
-		audio = new File("dataset/Videos/data_test1.wav");
-
 		try {
-			videoStream = new FileInputStream(video);
-			audioStream = new FileInputStream(audio);
+			videoStream = new FileInputStream(videopath);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
 
+		//Swing Components to display video and controls
 		frame = new JLabel(new ImageIcon(img));
+		play = new JButton("Play");
+		pause = new JButton("Pause");
+		stop = new JButton("Stop");
+		
+		//Layout stuff to make it look pretty
+		GridBagConstraints layout = new GridBagConstraints();
+		this.setLayout(new GridBagLayout());
+		
+		layout.gridx = 0; layout.gridy = 0;
+		layout.gridwidth = 3;
+		this.add(frame, layout);
+		
+		layout.fill = GridBagConstraints.HORIZONTAL;
+		layout.gridx = 0;
+		layout.gridy = 1;
+		layout.gridwidth = 1;
+		layout.weightx = 1;
+		this.add(play, layout);
 
-		final PlaySound p = new PlaySound(audioStream);
-		button = new JButton("Stop");
+		layout.gridx = 1;
+		this.add(pause, layout);
+		
+		layout.gridx = 2;
+		this.add(stop, layout);
 
-		Thread t = new Thread(){public void run() {
-			try {
-				p.play();
-			} catch (PlayWaveException e) {
-				e.printStackTrace();
-			}
-		}};
+		//ActionListeners to make buttons do things
+		play.addActionListener(this);
+		pause.addActionListener(this);
+		stop.addActionListener(this);
 
-
-		this.add(frame);
-		this.add(button);
-		button.addActionListener(this);
-		//t.start();
+		//Set up components to play audio
+		audio = new File(audiopath);
 		try {
-			stream = AudioSystem.getAudioInputStream(audio);
-			format = stream.getFormat();
+			audioStream = AudioSystem.getAudioInputStream(audio);
+			format = audioStream.getFormat();
 			info = new DataLine.Info(Clip.class, format);
 			clip = (Clip)AudioSystem.getLine(info);
-			//stream.skip((long)(70 * format.getFrameSize() * format.getFrameRate()));
-			clip.open(stream);
-			//clip.start();
+			clip.open(audioStream);
+			clip.start();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
+		//Start timer
 		timer.start();
 	}
 
 	@Override
 	public void actionPerformed(ActionEvent arg0) {
-		if (arg0.getSource() == button) {
+		//If pause button is pressed. Pause if playing.
+		if (arg0.getSource() == pause) {
+			//stream.skip((long)(10 * format.getFrameSize() * format.getFrameRate()));
+			//clip.setFramePosition(clip.getFramePosition() + (int)(10 * format.getFrameRate()));
+			if (clip.isActive()) {
+				clip.stop();
+				System.out.println("pause");
+			}
+		}
+		//If play button is pressed. Play if paused/stopped
+		else if (arg0.getSource() == play) {
+			if (!clip.isActive()) {
+				clip.start();
+				System.out.println("play");
+			}
+		}
+		//If stop button is pressed
+		else if (arg0.getSource() == stop) {
+			//Reset audio
+			clip.stop();
+			clip.close();
+			
 			try {
-				//stream.skip((long)(10 * format.getFrameSize() * format.getFrameRate()));
-				clip.setFramePosition(clip.getFramePosition() + (int)(10 * format.getFrameRate()));
+				audioStream = AudioSystem.getAudioInputStream(audio);
+				format = audioStream.getFormat();
+				info = new DataLine.Info(Clip.class, format);
+				clip = (Clip)AudioSystem.getLine(info);
+				clip.open(audioStream);
+				
+				//Reset video
+				curFrame = 0;
+				videoStream.close();
+				videoStream = new FileInputStream(videopath);
+				
+				//Black out screen
+				for(int y = 0; y < HEIGHT; y++){
+					for(int x = 0; x < WIDTH; x++){
+						img.setRGB(x,y,0);
+					}
+				}
+				repaint();
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
+		//If this is a result of the timer firing
 		else {
+			//Don't bother doing anything if audio is stopped
+			if (!clip.isActive()) {
+				return;
+			}
 			try {
+				//Generate byte array to hold frame
 				byte[] bytes = new byte[WIDTH*HEIGHT*3];
-		
-				int offset = 0;
-				int numRead = 0;
-				while (offset < bytes.length && (numRead=videoStream.read(bytes, offset, bytes.length-offset)) >= 0) {
-					offset += numRead;
-				}
-		        
-		        double h=0;
-		        double sum=0;
-		        double sumr=0;
-		        double sumg=0;
-		        double sumb=0;
-				int ind = 0;
-				int[] YSpace = new int[256];
-				int[] RSpace = new int[256];
-				int[] GSpace = new int[256];
-				int[] BSpace = new int[256];
-				
-				for(int y = 0; y < HEIGHT; y++){
-		
-					for(int x = 0; x < WIDTH; x++){
-						int r = bytes[ind];
-						int g = bytes[ind+HEIGHT*WIDTH];
-						int b = bytes[ind+HEIGHT*WIDTH*2]; 
-						
 
-						int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
-						img.setRGB(x,y,pix);
-						
-						int Y = (int)(0.299*r+0.587*g+0.114*b);
-		                //calculate the entropy for the frame
-				        //System.out.print("Y value: "+Y+"    ");
-				        /*if(Y<=0)
-				        {
-				        	h=0;
-				        }
-				        else{
-				        	 h=(double)(Y*Math.log10(Y));
-				        }*/
-				        if (Y <= 0) {
-				        	Y = 0;
-				        }
-				        else if (Y >= 255){
-				        	Y = 255;
-				        }
-				        if (r <= 0) {
-				        	r = 0;
-				        }
-				        else if (r >= 255){
-				        	r = 255;
-				        }
-				        if (g <= 0) {
-				        	g = 0;
-				        }
-				        else if (g >= 255){
-				        	g = 255;
-				        }
-				        if (b <= 0) {
-				        	b = 0;
-				        }
-				        else if (b >= 255){
-				        	b = 255;
-				        }
-				        
-				        ++YSpace[Y];
-				        ++RSpace[r];
-				        ++GSpace[g];
-				        ++BSpace[b];
-				       
-				        
-				        //System.out.println(+h);
-				        //sum=sum+h;
-						ind++;
-						
-					}
-				}
-				
-				for (int i : YSpace) {
-					if (i != 0) {
-						double prob = i*1.0 / (WIDTH*HEIGHT);
-						sum += prob * Math.log(i) / Math.log(2);
-					}
-				}
-				for (int i : RSpace) {
-					if (i != 0) {
-						double prob = i*1.0 / (WIDTH*HEIGHT);
-						sumr += prob * Math.log(i) / Math.log(2);
-					}
-				}
-				for (int i : GSpace) {
-					if (i != 0) {
-						double prob = i*1.0 / (WIDTH*HEIGHT);
-						sumg += prob * Math.log(i) / Math.log(2);
-					}
-				}
-				for (int i : BSpace) {
-					if (i != 0) {
-						double prob = i*1.0 / (WIDTH*HEIGHT);
-						sumb += prob * Math.log(i) / Math.log(2);
-					}
-				}
-				
-				
-				//out.println("Frame : "+ (++tt) + " "+sum);
-				out.println(++tt + "," + sum + " | " + sumr + " | " + sumg + " | " + sumb);
-				//tt++;
-				// Print Entropy Difference
-				/*if (Math.abs(prevFrameEntropy - sum) > .1) {
-					System.out.println(tt);
-					repaint();
-				}*/
-				
-				double difY = Math.abs(prevFrameEntropy - sum);
-				double difR = Math.abs(prevR - sumr);
-				double difG = Math.abs(prevG - sumg);
-				double difB = Math.abs(prevB - sumb);
-				
-				/*if (difY > 0.7) {
-					if (prevDifY == 0 || prevDifY != 0 && difY / prevDifY > 5) {
-						System.out.println(tt);
-						repaint();
-					}
-				}*/
-				
-				if (difY > 0.4 || (difR > 0.35 || difG > 0.35 || difB > 0.35)) { 
-					if ((prevDifY == 0 || prevDifY != 0 && difY / prevDifY > 100) || (prevDifR == 0 || prevDifR != 0 && difR / prevDifR > 100) || 
-							(prevDifG == 0 || prevDifG != 0 && difG / prevDifG > 100) || (prevDifB == 0 || prevDifB != 0 && difB / prevDifB > 100)) {
-						System.out.println(tt);
-						repaint();
-					}
-				}if (difY > 0.5 || (difR > 0.5 || difG > 0.5 || difB > 0.5)) { 
-					if ((prevDifY == 0 || prevDifY != 0 && difY / prevDifY > 50) || (prevDifR == 0 || prevDifR != 0 && difR / prevDifR > 50) || 
-							(prevDifG == 0 || prevDifG != 0 && difG / prevDifG > 50) || (prevDifB == 0 || prevDifB != 0 && difB / prevDifB > 50)) {
-						System.out.println(tt);
-						repaint();
-					}
-				}
-				if (difY > 0.7 || (difR > 0.7 || difG > 0.7 || difB > 0.7)) {
-					if ((prevDifY == 0 || prevDifY != 0 && difY / prevDifY > 10) || (prevDifR == 0 || prevDifR != 0 && difR / prevDifR > 10) || 
-							(prevDifG == 0 || prevDifG != 0 && difG / prevDifG > 10) || (prevDifB == 0 || prevDifB != 0 && difB / prevDifB > 10)) {
-						System.out.println(tt);
-						repaint();
-					}
-				}
-				//out.println("Difference in entropy from previous frame : " + Math.abs(prevFrameEntropy-sum));
-				prevFrameEntropy=sum;
-				prevDifY = difY;
-				prevDifR = difR;
-				prevDifG = difG;
-				prevDifB = difB;
-				prevR = sumr;
-				prevG = sumg;
-				prevB = sumb;
+				//Gets the video frame the audio is on
+				int audioFrame = (int)(clip.getFramePosition() / format.getFrameRate() * FRAMERATE);
 
-				h=0;
-				sum=0;
+				//if audio is behind video, wait for audio to catch up
+				if (audioFrame < curFrame) {
+					return;
+				}
+				//If audio is ahead of video, keep going through frames until video catches up
+				while (audioFrame > curFrame) {
+					int offset = 0;
+					int numRead = 0;
+					while (offset < bytes.length && (numRead=videoStream.read(bytes, offset, bytes.length-offset)) >= 0) {
+						offset += numRead;
+					}
+
+					//Update frame
+					int ind = 0;
+					for(int y = 0; y < HEIGHT; y++){
+						for(int x = 0; x < WIDTH; x++){
+							int r = bytes[ind];
+							int g = bytes[ind+HEIGHT*WIDTH];
+							int b = bytes[ind+HEIGHT*WIDTH*2]; 
+
+							int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
+							img.setRGB(x,y,pix);
+
+							++ind;
+						}
+					}
+					++curFrame;
+				}
+				//Actually paint the frame
+				repaint();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			
+
 		}
 	}
 
