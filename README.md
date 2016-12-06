@@ -5,6 +5,12 @@
 ## Goal
 There were three parts to this project, all about processing a video containing some advertisements.
 
+## Usage:
++ Requirements: should have dataset folder and dataset2 folder containing the Ads and Brand images
++ Part 1: Run Player.java VIDEOPATH AUDIOPATH
++ Part 2: Run MyPart2.java VIDEOPATH AUDIOPATH VIDEOOUT AUDIOOUT
++ Part 3: Run MyPart3.java VIDEOPATH AUDIOPATH VIDEOOUT AUDIOOUT 1
+
 ###Part One
 Part one was to take a video file of RGB format
 (each byte indicated one color channel for one pixel for one frame) and a WAV audio file
