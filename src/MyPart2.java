@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Random;
 import java.util.Set;
 
 import javax.sound.sampled.AudioFileFormat;
@@ -27,6 +28,23 @@ public class MyPart2 {
 	}
 	
 	/**
+	 * Enum to describe which logos are present and what to replace ads with
+	 * @author Tobias
+	 */
+	public static enum Logo {
+		STARBUCKS (0),
+		SUBWAY (1),
+		NFL (2),
+		MCDONALDS (3),
+		NONE (-1);
+		
+		int key;
+		Logo(int k) {
+			key = k;
+		}
+	}
+	
+	/**
 	 * A single shot. Contains timestamps, category, and other info
 	 * @author Tobias
 	 */
@@ -34,6 +52,7 @@ public class MyPart2 {
 		public int start, end;
 		public Category cat;
 		double avgAmp;
+		Logo logo;
 		//sampleCount is unnecessary because I can just use length()/30*audio framerate
 		int sampleCount;
 		//Really bootleg quick way to measure frequencies
@@ -44,6 +63,7 @@ public class MyPart2 {
 			cat = Category.UNKNOWN;
 			avgAmp = 0;
 			sampleCount = 0;
+			logo = Logo.NONE;
 		}
 		
 		public int length() {
@@ -96,7 +116,6 @@ public class MyPart2 {
 		//Count frames each time and go until end of file (numRead == -1)
 		//Note: I start on frame 1, not frame 0
 		for (frame = 1; numRead != -1; ++frame) {
-			
 			//tbh idk why it's done this way, but I guess it's to ensure we read to the full buffer
 			int offset = 0;
 			while (offset < bytes.length && (numRead=videoStream.read(bytes, offset, bytes.length-offset)) >= 0) {
@@ -357,25 +376,31 @@ public class MyPart2 {
 		//Some initial data for the for loop
 		int numRead = 0;
 		int frame = 1;
-		int curShot = 0;
+		int curShot = -1;
 		//I just don't want to allocate more space each time
 		byte bytes[] = new byte[3*WIDTH*HEIGHT];
 		
 		//Count frames each time and go until end of file (numRead == -1)
 		//Note: I start on frame 1, not frame 0
 		for (frame = 1; numRead != -1; ++frame) {
-			
-			//tbh idk why it's done this way, but I guess it's to ensure we read to the full buffer
 			int offset = 0;
 			while (offset < bytes.length && (numRead=videoStream.read(bytes, offset, bytes.length-offset)) >= 0) {
 				offset += numRead;
 			}
 
-			if (shots[curShot].end < frame) {
+			//curShot starts at -1 to ensure this block gets called whenever a scene starts
+			if (curShot == -1 || shots[curShot].end < frame) {
 				++curShot;
 				//If we somehow go past the end
 				if (curShot == shots.length) {
 					break;
+				}
+				
+				//On every shot transition, if we get an ad shot labeled with a logo, add the new ad
+				//This requires logo to be set for only the first shot in an ad block, which will
+				//be ensured by the processing done earlier. Could also do shots[curShot-1] != Ad
+				if (shots[curShot].cat == Category.SPAM && shots[curShot].logo != Logo.NONE) {
+					insertAdVideo(shots[curShot].logo, outStream);
 				}
 			}
 			
@@ -415,11 +440,9 @@ public class MyPart2 {
 		//Init variables for loop
 		int read = 0;
 		int offset = 0;
-		int curShot = 0;
+		int curShot = -1;
 		int length = 0;
 		for (int frame = 1; (read = stream.read(buffer)) > 0; ++frame) {
-			//If we don't read a full frame for some reason. I hope this doesn't happen because it's hard to test
-			//if my logic here is right
 			if (read != framesize) {
 				offset = read;
 				while (offset < framesize && (read = stream.read(buffer, offset, framesize - offset)) >= 0) {
@@ -427,11 +450,17 @@ public class MyPart2 {
 				}
 			}
 
-			if (shots[curShot].end < frame) {
+			//curShot starts at -1 to ensure this block gets called whenever a scene starts
+			if (curShot == -1 || shots[curShot].end < frame) {
 				++curShot;
 				//If we somehow go past the end
 				if (curShot == shots.length) {
 					break;
+				}
+				
+				//On every shot transition, if we get an ad shot labeled with a logo, add the new ad
+				if (shots[curShot].cat == Category.SPAM && shots[curShot].logo != Logo.NONE) {
+					length += insertAdAudio(shots[curShot].logo, fout);
 				}
 			}
 
@@ -440,6 +469,8 @@ public class MyPart2 {
 				length += (int)(framerate/30);
 			}
 		}
+		//Close these streams
+		stream.close();
 		fout.close();
 		
 		//Take the data in the temp file and write it to an actual file
@@ -449,6 +480,102 @@ public class MyPart2 {
 		AudioSystem.write(as, AudioFileFormat.Type.WAVE, out);
 		fin.close();
 		as.close();
+	}
+	
+	public static String[] adVideos = {"dataset/Ads/Starbucks_Ad_15s.rgb",
+			"dataset/Ads/Subway_Ad_15s.rgb",
+			"dataset2/Ads/nfl_Ad_15s.rgb",
+			"dataset2/Ads/mcd_Ad_15s.rgb"};
+	
+	public static String[] adAudios = {"dataset/Ads/Starbucks_Ad_15s.wav",
+			"dataset/Ads/Subway_Ad_15s.wav",
+			"dataset2/Ads/nfl_Ad_15s.wav",
+			"dataset2/Ads/mcd_Ad_15s.wav"};
+	
+	/**
+	 * Insert an ad into a video
+	 * @param logo The type of ad to insert
+	 * @param vid The video file to insert into
+	 */
+	public static void insertAdVideo(Logo logo, FileOutputStream vid) throws IOException {
+		InputStream videoStream = new FileInputStream(adVideos[logo.key]);
+		
+		//Some initial data for the for loop
+		int numRead = 0;
+		//I just don't want to allocate more space each time
+		byte bytes[] = new byte[3*WIDTH*HEIGHT];
+		
+		//Go until end of file (numRead == -1)
+		while (numRead != -1) {
+			int offset = 0;
+			while (offset < bytes.length && (numRead=videoStream.read(bytes, offset, bytes.length-offset)) >= 0) {
+				offset += numRead;
+			}
+			
+			vid.write(bytes);
+		}
+		
+		//Close the streams like a responsible adult
+		videoStream.close();
+	}
+	
+	/**
+	 * Insert an ad into the audio and return the length of the added ad
+	 * @param logo The type of ad to insert
+	 * @param fout The audio file to insert into
+	 * @return The length of the audio inserted in number of samples
+	 */
+	public static int insertAdAudio(Logo logo, FileOutputStream fout) throws IOException, UnsupportedAudioFileException {
+		File audio = new File(adAudios[logo.key]);
+		
+		//Get info about audio file
+		AudioInputStream stream = AudioSystem.getAudioInputStream(audio);
+		AudioFormat format = stream.getFormat();
+		double framerate = format.getFrameRate();
+		int framesize = format.getFrameSize();
+		
+		//buffer holds a frame of audio
+		byte buffer[] = new byte[(int)(framerate*framesize/30)];
+		
+		//Init variables for loop
+		int read = 0;
+		int offset = 0;
+		int length = 0;
+		while ((read = stream.read(buffer)) > 0) {
+			if (read != framesize) {
+				offset = read;
+				while (offset < framesize && (read = stream.read(buffer, offset, framesize - offset)) >= 0) {
+					offset += read;
+				}
+			}
+
+			fout.write(buffer);
+			length += (int)(framerate/30);
+		}
+		stream.close();
+		return length;
+	}
+	
+	public static Random gen = new Random();
+	
+	/**
+	 * Find logos and use them to assign ad shots to new ads
+	 * Currently assigns random ads, but will pick based on part 3 results
+	 * @param shots The array of Shots
+	 */
+	public static void processLogos(Shot[] shots) {
+		for (int i = 0; i < shots.length; ++i) {
+			if (shots[i].cat == Category.SPAM) {
+				if (i == 0 || shots[i-1].cat != Category.SPAM) {
+					switch(gen.nextInt(4)) {
+					case 0: shots[i].logo = Logo.STARBUCKS; break;
+					case 1: shots[i].logo = Logo.SUBWAY; break;
+					case 2: shots[i].logo = Logo.NFL; break;
+					default: shots[i].logo = Logo.MCDONALDS;
+					}
+				}
+			}
+		}
 	}
 	
 	public static void main(String[] args) throws Exception {
@@ -471,9 +598,13 @@ public class MyPart2 {
 		}
 		
 		//Get shots from video by analyzing video and audio
+		System.out.println("Analyzing Video for shots...");
 		Shot[] shots = analyzeVideo(videopath);
+		System.out.println("Analyzing Audio to supplement video shot cutting...");
 		analyzeAudio(audiopath, shots);
 		
+
+		System.out.println("Labeling shots...");
 		//Pass 1: look for isolated shots and join labels with neighbors
 		for (int i = 0; i < shots.length; ++i) {
 			Set<Category> neighbors = new HashSet<Category>();
@@ -554,8 +685,14 @@ public class MyPart2 {
 		}
 		*/
 		
+		//Replace ads
+		System.out.println("Replacing ads...");
+		processLogos(shots);
+		
 		//Cut the video and audio
+		System.out.println("Cutting ad video...");
 		cutVideo(videopath, videoout, shots);
+		System.out.println("Cutting ad audio...");
 		cutAudio(audiopath, audioout, shots);
 	}
 
