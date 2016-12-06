@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
 
@@ -57,6 +59,7 @@ public class MyPart2 {
 		int sampleCount;
 		//Really bootleg quick way to measure frequencies
 		double bootleg;
+		int logos[];
 		public Shot(int s, int e) {
 			start = s;
 			end = e;
@@ -64,6 +67,7 @@ public class MyPart2 {
 			avgAmp = 0;
 			sampleCount = 0;
 			logo = Logo.NONE;
+			logos = new int[4];
 		}
 		
 		public int length() {
@@ -563,10 +567,64 @@ public class MyPart2 {
 	 * Currently assigns random ads, but will pick based on part 3 results
 	 * @param shots The array of Shots
 	 */
-	public static void processLogos(Shot[] shots) {
+	public static void processLogos(String videopath, Shot[] shots) throws IOException {
+		//Get logo counts for shots
+		int[][][] logos = MyPart3.readLogos();
+		MyPart3.analyzeVideo(videopath, logos, shots);
+		
+		//Decide on logos for shots
+		for (int i = 0; i < shots.length; ++i) {
+			if (shots[i].logos[Logo.SUBWAY.key] != 0
+					&& shots[i].logos[Logo.SUBWAY.key] > shots[i].logos[Logo.STARBUCKS.key]
+					&& shots[i].logos[Logo.SUBWAY.key] > shots[i].logos[Logo.NFL.key]) {
+				shots[i].logo = Logo.SUBWAY;
+			}
+			//Will go here if subway count is zero, sub < star, or sub < nfl
+			//so if star != 0, then star > nfl would also mean star > sub
+			//possibilities are star > nfl > sub, star > sub > nfl, nfl > star > sub, nfl > sub > star
+			else if (shots[i].logos[Logo.STARBUCKS.key] != 0
+					&& shots[i].logos[Logo.STARBUCKS.key] > shots[i].logos[Logo.NFL.key]) {
+				shots[i].logo = Logo.STARBUCKS;
+			}
+			//If we're here, then as long as nfl isn't 0 we're good
+			//Either other two are 0, or nfl >= starbucks
+			else if (shots[i].logos[Logo.NFL.key] != 0) {
+				shots[i].logo = Logo.NFL;
+			}
+			//McDonalds has the most false positives so just put it at lowest priority
+			else if (shots[i].logos[Logo.MCDONALDS.key] != 0) {
+				shots[i].logo = Logo.MCDONALDS;
+			}
+		}
+		
+		//For each ad beginning shot, find the nearest logo
+		Queue<Logo> logoBacklog = new LinkedList<Logo>();
+		Queue<Integer> adBacklog = new LinkedList<Integer>();
+		for (int i = 0; i < shots.length; ++i) {
+			if (shots[i].logo != Logo.NONE) {
+				logoBacklog.add(shots[i].logo);
+				shots[i].logo = Logo.NONE;
+				
+				if (!adBacklog.isEmpty()) {
+					shots[adBacklog.poll()].logo = logoBacklog.poll();
+				}
+			}
+			if (shots[i].cat == Category.SPAM) {
+				if ((i == 0 || shots[i-1].cat != Category.SPAM) && shots[i].logo == Logo.NONE) {
+					if (!logoBacklog.isEmpty()) {
+						shots[i].logo = logoBacklog.poll();
+					}
+					else {
+						adBacklog.add(i);
+					}
+				}
+			}
+		}
+		
+		//Well uh, we got nothing. Assign randomly and hope for the best.
 		for (int i = 0; i < shots.length; ++i) {
 			if (shots[i].cat == Category.SPAM) {
-				if (i == 0 || shots[i-1].cat != Category.SPAM) {
+				if ((i == 0 || shots[i-1].cat != Category.SPAM) && shots[i].logo == Logo.NONE) {
 					switch(gen.nextInt(4)) {
 					case 0: shots[i].logo = Logo.STARBUCKS; break;
 					case 1: shots[i].logo = Logo.SUBWAY; break;
@@ -580,10 +638,11 @@ public class MyPart2 {
 	
 	public static void main(String[] args) throws Exception {
 		//Get input file name
-		String videopath = "dataset/Videos/data_test1.rgb";
-		String audiopath = "dataset/Videos/data_test1.wav";
+		String videopath = "dataset2/Videos/data_test2.rgb";
+		String audiopath = "dataset2/Videos/data_test2.wav";
 		String videoout = "video.rgb";
 		String audioout = "audio.wav";
+		boolean part3 = true;
 		if (args.length > 0) {
 			videopath = args[0];
 		}
@@ -595,6 +654,9 @@ public class MyPart2 {
 		}
 		if (args.length > 3) {
 			audioout = args[3];
+		}
+		if (args.length > 4) {
+			part3 = true;
 		}
 		
 		//Get shots from video by analyzing video and audio
@@ -686,9 +748,10 @@ public class MyPart2 {
 		*/
 		
 		//Replace ads
-		System.out.println("Replacing ads...");
-		processLogos(shots);
-		
+		if (part3) {
+			System.out.println("Replacing ads...");
+			processLogos(videopath, shots);
+		}
 		//Cut the video and audio
 		System.out.println("Cutting ad video...");
 		cutVideo(videopath, videoout, shots);

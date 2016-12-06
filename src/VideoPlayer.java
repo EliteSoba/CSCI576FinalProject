@@ -1,3 +1,4 @@
+import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
@@ -52,6 +53,9 @@ public class VideoPlayer extends JPanel implements ActionListener {
 	//Filenames of video and audio
 	String videopath;
 	String audiopath;
+	
+	//Debug for watching logo recognition video
+	boolean debug = false;
 
 	//Current video frame
 	int curFrame;
@@ -136,14 +140,14 @@ public class VideoPlayer extends JPanel implements ActionListener {
 			//clip.setFramePosition(clip.getFramePosition() + (int)(10 * format.getFrameRate()));
 			if (clip.isActive()) {
 				clip.stop();
-				System.out.println("pause");
+				//System.out.println(curFrame);
 			}
 		}
 		//If play button is pressed. Play if paused/stopped
 		else if (arg0.getSource() == play) {
 			if (!clip.isActive()) {
 				clip.start();
-				System.out.println("play");
+				//System.out.println("play");
 			}
 		}
 		//If stop button is pressed
@@ -204,10 +208,73 @@ public class VideoPlayer extends JPanel implements ActionListener {
 					int ind = 0;
 					for(int y = 0; y < HEIGHT; y++){
 						for(int x = 0; x < WIDTH; x++){
-							int r = bytes[ind];
-							int g = bytes[ind+HEIGHT*WIDTH];
-							int b = bytes[ind+HEIGHT*WIDTH*2]; 
-
+							int r = bytes[ind] & 0xff;
+							int g = bytes[ind+HEIGHT*WIDTH] & 0xff;
+							int b = bytes[ind+HEIGHT*WIDTH*2] & 0xff; 
+							
+							if (debug) {
+								//Only look at center half
+								if (x < WIDTH / 4 || x > 3 * WIDTH / 4) {
+									g = 0;
+									b = 0;
+									r = 0;
+								}
+								
+								float hsv[] = new float[3];
+								Color.RGBtoHSB(r, g, b, hsv);
+								//High Brightness/Saturation
+								if (hsv[1] > 0.8 || hsv[2] > 0.8) {
+									float h = hsv[0] * 240;
+									//Green
+									if (h > 70 && h < 120 && hsv[1] > .7) {
+										g = 255;
+										r = 0;
+										b = 70;
+									}
+									//Yellow
+									else if (h > 30 && h < 50) {
+										r = 255;
+										g = 255;
+										b = 0;
+									}
+									//Blue
+									else if (h >= 120 && h < 165 && hsv[1] > .7) {
+										r = 0;
+										g = 30;
+										b = 200;
+									}
+									//Red
+									else if ((h > 220 || h < 10) && hsv[1] > .7) {
+										r = 255;
+										g = 0;
+										b = 20;
+									}
+									//White
+									else if (hsv[1] < .1) {
+										r = 255;
+										g = 255;
+										b = 255;
+									}
+									//Everything Else
+									else {
+										r = 0;
+										g = 0;
+										b = 0;
+									}
+								}
+								//Not enough saturation/brightness
+								//So leave as white or as black
+								else if (g > 200 && b > 200 && r > 200) {
+									r = 255;
+									g = 255;
+									b = 255;
+								}
+								else {
+									g = 0;
+									b = 0;
+									r = 0;
+								}
+							}
 							int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
 							img.setRGB(x,y,pix);
 
