@@ -1,5 +1,6 @@
 bin/*
-*.rgb
+dataset/Ads/*.rgb
+dataset2/Ads/*.rgb
 dataset/Audio/*
 dataset/Videos/*
 dataset2/Videos/*
