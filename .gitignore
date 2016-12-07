@@ -1,9 +1,8 @@
 bin/*
+*.rgb
 dataset/Audio/*
 dataset/Videos/*
-dataset/Ads/*.rgb
 dataset2/Videos/*
-dataset2/Ads/*.rgb
 .classpath
 .project
 .settings/*
